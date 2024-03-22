@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using osu.Framework.Logging;
 
 namespace VRCOSC.Game.OSC.Client;
 
@@ -25,13 +26,23 @@ public class OscReceiver
         this.endPoint = endPoint;
     }
 
-    public void Enable()
+    public bool Enable()
     {
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.Bind(endPoint);
 
-        tokenSource = new CancellationTokenSource();
-        incomingTask = Task.Run(runReceiveLoop);
+        try
+        {
+            socket.Bind(endPoint);
+            tokenSource = new CancellationTokenSource();
+            incomingTask = Task.Run(runReceiveLoop);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Notifications.Notify(e);
+            Logger.Error(e, $"{nameof(OscReceiver)} experienced an exception");
+            return false;
+        }
     }
 
     public async Task Disable()
@@ -41,21 +52,21 @@ public class OscReceiver
         await (incomingTask ?? Task.CompletedTask);
 
         incomingTask?.Dispose();
-        tokenSource?.Dispose();
         socket?.Close();
 
         incomingTask = null;
-        tokenSource = null;
         socket = null;
     }
 
     private async void runReceiveLoop()
     {
+        if (!(socket?.IsBound ?? false)) return;
+
         while (!tokenSource!.Token.IsCancellationRequested)
         {
             try
             {
-                buffer.Initialize();
+                Array.Clear(buffer, 0, buffer.Length);
                 await socket!.ReceiveAsync(buffer, SocketFlags.None, tokenSource.Token);
                 OnRawDataReceived?.Invoke(buffer);
             }

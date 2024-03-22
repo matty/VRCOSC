@@ -1,4 +1,7 @@
-﻿using System;
+// Copyright (c) VolcanicArts. Licensed under the GPL-3.0 License.
+// See the LICENSE file in the repository root for full license text.
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -28,8 +31,8 @@ public static class OVRHelper
     internal static bool InitialiseOpenVR(EVRApplicationType applicationType)
     {
         var err = new EVRInitError();
-        var state = Valve.VR.OpenVR.InitInternal(ref err, applicationType);
-        return err == EVRInitError.None && state != 0;
+        Valve.VR.OpenVR.Init(ref err, applicationType);
+        return err == EVRInitError.None;
     }
 
     internal static float GetFrameTimeMilli()
@@ -56,9 +59,21 @@ public static class OVRHelper
         return data;
     }
 
+    internal static uint GetLeftControllerId()
+    {
+        var id = getControllerIdFromHint("left");
+        return id != Valve.VR.OpenVR.k_unTrackedDeviceIndexInvalid ? id : Valve.VR.OpenVR.System.GetTrackedDeviceIndexForControllerRole(ETrackedControllerRole.LeftHand);
+    }
+
+    internal static uint GetRightControllerId()
+    {
+        var id = getControllerIdFromHint("right");
+        return id != Valve.VR.OpenVR.k_unTrackedDeviceIndexInvalid ? id : Valve.VR.OpenVR.System.GetTrackedDeviceIndexForControllerRole(ETrackedControllerRole.RightHand);
+    }
+
     // GetTrackedDeviceIndexForControllerRole doesn't work when a tracker thinks it's a controller and assumes that role
     // We can forcibly find the correct indexes by using the model name
-    internal static uint GetControllerIdFromHint(string controllerHint)
+    private static uint getControllerIdFromHint(string controllerHint)
     {
         var controllerIds = getAllControllersFromHint(controllerHint).ToList();
 
@@ -93,6 +108,8 @@ public static class OVRHelper
 
     internal static bool GetBoolTrackedDeviceProperty(uint index, ETrackedDeviceProperty property)
     {
+        if (index == Valve.VR.OpenVR.k_unTrackedDeviceIndexInvalid) return default;
+
         var error = new ETrackedPropertyError();
         var value = Valve.VR.OpenVR.System.GetBoolTrackedDeviceProperty(index, property, ref error);
 
@@ -104,6 +121,8 @@ public static class OVRHelper
 
     internal static int GetInt32TrackedDeviceProperty(uint index, ETrackedDeviceProperty property)
     {
+        if (index == Valve.VR.OpenVR.k_unTrackedDeviceIndexInvalid) return default;
+
         var error = new ETrackedPropertyError();
         var value = Valve.VR.OpenVR.System.GetInt32TrackedDeviceProperty(index, property, ref error);
 
@@ -115,6 +134,8 @@ public static class OVRHelper
 
     internal static float GetFloatTrackedDeviceProperty(uint index, ETrackedDeviceProperty property)
     {
+        if (index == Valve.VR.OpenVR.k_unTrackedDeviceIndexInvalid) return default;
+
         var error = new ETrackedPropertyError();
         var value = Valve.VR.OpenVR.System.GetFloatTrackedDeviceProperty(index, property, ref error);
 
@@ -128,6 +149,8 @@ public static class OVRHelper
 
     internal static string GetStringTrackedDeviceProperty(uint index, ETrackedDeviceProperty property)
     {
+        if (index == Valve.VR.OpenVR.k_unTrackedDeviceIndexInvalid) return string.Empty;
+
         var error = new ETrackedPropertyError();
         sb.Clear();
         Valve.VR.OpenVR.System.GetStringTrackedDeviceProperty(index, property, sb, Valve.VR.OpenVR.k_unMaxPropertyStringSize, ref error);
@@ -136,5 +159,10 @@ public static class OVRHelper
 
         OVRHelper.error(nameof(GetStringTrackedDeviceProperty), property, error, index);
         return string.Empty;
+    }
+
+    public static void TriggerHaptic(ulong action, uint device, float durationSeconds, float frequency, float amplitude)
+    {
+        Valve.VR.OpenVR.Input.TriggerHapticVibrationAction(action, 0, durationSeconds, frequency, amplitude, device);
     }
 }

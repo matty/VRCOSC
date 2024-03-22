@@ -23,14 +23,7 @@ public partial class VRCOSCScrollContainer<T> : ScrollContainer<T>
     protected VRCOSCScrollContainer(Direction scrollDirection = Direction.Vertical)
         : base(scrollDirection)
     {
-    }
-
-    protected override void UpdateAfterChildren()
-    {
-        base.UpdateAfterChildren();
-
-        // we always want this to show
-        Scrollbar.Show();
+        ScrollbarOverlapsContent = false;
     }
 
     protected override ScrollbarContainer CreateScrollbar(Direction direction) => new VRCOSCScrollbar(direction);
@@ -46,10 +39,12 @@ public partial class VRCOSCScrollContainer<T> : ScrollContainer<T>
             {
                 RelativeSizeAxes = Axes.Both,
                 Masking = true,
+                BorderThickness = 2,
+                BorderColour = ThemeManager.Current[ThemeAttribute.Border],
                 Child = new Box
                 {
                     RelativeSizeAxes = Axes.Both,
-                    Colour = ThemeManager.Current[ThemeAttribute.Darker]
+                    Colour = ThemeManager.Current[ThemeAttribute.Lighter]
                 }
             };
         }

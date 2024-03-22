@@ -18,33 +18,37 @@ public class OVRClient
 
     public bool HasInitialised { get; private set; }
 
-    public readonly OVRMetadata Metadata;
     public readonly OVRSystem System;
     public readonly OVRInput Input;
+    public OVRMetadata? Metadata;
 
     public HMD HMD => System.HMD;
     public Controller LeftController => System.LeftController;
     public Controller RightController => System.RightController;
     public IEnumerable<Tracker> Trackers => System.Trackers;
 
-    public OVRClient(OVRMetadata metadata)
+    public OVRClient()
     {
-        Metadata = metadata;
         System = new OVRSystem();
         Input = new OVRInput(this);
     }
 
+    public void SetMetadata(OVRMetadata metadata)
+    {
+        Metadata = metadata;
+    }
+
     public void Init()
     {
-        if (HasInitialised) return;
+        if (HasInitialised || Metadata is null) return;
 
-        HasInitialised = OVRHelper.InitialiseOpenVR(Metadata.ApplicationType);
-
-        if (!HasInitialised) return;
+        if (!OVRHelper.InitialiseOpenVR(Metadata.ApplicationType)) return;
 
         Valve.VR.OpenVR.Applications.AddApplicationManifest(Metadata.ApplicationManifest, false);
         System.Init();
         Input.Init();
+
+        HasInitialised = true;
     }
 
     public void Update()
@@ -77,6 +81,9 @@ public class OVRClient
         }
     }
 
+    public void TriggerLeftControllerHaptic(float durationSeconds, float frequency, float amplitude) => OVRHelper.TriggerHaptic(Input.LeftControllerHapticActionHandle, System.LeftController.Id, durationSeconds, frequency, amplitude);
+    public void TriggerRightControllerHaptic(float durationSeconds, float frequency, float amplitude) => OVRHelper.TriggerHaptic(Input.RightControllerHapticActionHandle, System.RightController.Id, durationSeconds, frequency, amplitude);
+
     private void shutdown()
     {
         Valve.VR.OpenVR.Shutdown();
@@ -84,8 +91,10 @@ public class OVRClient
         OnShutdown?.Invoke();
     }
 
-    public static void SetAutoLaunch(bool value)
+    public void SetAutoLaunch(bool value)
     {
+        if (!HasInitialised) return;
+
         Valve.VR.OpenVR.Applications.SetApplicationAutoLaunch("volcanicarts.vrcosc", value);
     }
 }

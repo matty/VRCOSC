@@ -1,86 +1,79 @@
 ﻿// Copyright (c) VolcanicArts. Licensed under the GPL-3.0 License.
 // See the LICENSE file in the repository root for full license text.
 
-using VRCOSC.Game;
 using VRCOSC.Game.Modules;
+using VRCOSC.Game.Modules.Avatar;
 
 namespace VRCOSC.Modules.Weather;
 
-public partial class WeatherModule : ChatBoxModule
+[ModuleTitle("Weather")]
+[ModuleDescription("Retrieves weather information for a specific area")]
+[ModuleAuthor("VolcanicArts", "https://github.com/VolcanicArts", "https://avatars.githubusercontent.com/u/29819296?v=4")]
+[ModuleGroup(ModuleType.General)]
+public class WeatherModule : ChatBoxModule
 {
-    public override string Title => "Weather";
-    public override string Description => "Retrieves weather information for a specific area";
-    public override string Author => "VolcanicArts";
-    public override ModuleType Type => ModuleType.General;
-    protected override TimeSpan DeltaUpdate => TimeSpan.FromMinutes(10);
-    protected override int ChatBoxPriority => 1;
-
-    protected override IEnumerable<string> ChatBoxFormatValues => new[] { @"%tempc%", @"%tempf%", @"%humidity%" };
-    protected override string DefaultChatBoxFormat => @"Local Weather                                %tempc%C";
-
     private WeatherProvider? weatherProvider;
-    private Weather? currentWeather;
 
     protected override void CreateAttributes()
     {
-        CreateSetting(WeatherSetting.Postcode, "Location", "The postcode/zip code or city name to retrieve weather data for", string.Empty);
-
-        base.CreateAttributes();
+        CreateSetting(WeatherSetting.Postcode, "Location", "The post/zip code or city name to retrieve weather data for", string.Empty);
 
         CreateParameter<int>(WeatherParameter.Code, ParameterMode.Write, "VRCOSC/Weather/Code", "Weather Code", "The current weather's code");
+
+        CreateVariable(WeatherVariable.TempC, "Temp C", "tempc");
+        CreateVariable(WeatherVariable.TempF, "Temp F", "tempf");
+        CreateVariable(WeatherVariable.Humidity, "Humidity", "humidity");
+        CreateVariable(WeatherVariable.Condition, "Condition", "condition");
+
+        CreateState(WeatherState.Default, "Default", $"Local Weather/v{GetVariableFormat(WeatherVariable.Condition)}/v{GetVariableFormat(WeatherVariable.TempC)}C - {GetVariableFormat(WeatherVariable.TempF)}F");
     }
 
     protected override void OnModuleStart()
     {
-        base.OnModuleStart();
+        if (string.IsNullOrEmpty(GetSetting<string>(WeatherSetting.Postcode))) Log("Please provide a post/zip code or city name");
 
-        if (string.IsNullOrEmpty(GetSetting<string>(WeatherSetting.Postcode))) Log("Please provide a postcode/zip code or city name");
-
-        weatherProvider = new WeatherProvider(Secrets.GetSecret(VRCOSCSecretsKeys.Weather));
-        currentWeather = null;
-    }
-
-    protected override void OnModuleUpdate()
-    {
-        if (string.IsNullOrEmpty(GetSetting<string>(WeatherSetting.Postcode))) return;
-
-        if (weatherProvider is null) return;
-
-        Task.Run(async () =>
-        {
-            currentWeather = await weatherProvider.RetrieveFor(GetSetting<string>(WeatherSetting.Postcode));
-            sendParameters();
-        });
-    }
-
-    protected override void OnModuleStop()
-    {
-        weatherProvider = null;
+        weatherProvider ??= new WeatherProvider(OfficialModuleSecrets.GetSecret(OfficialModuleSecretsKeys.Weather));
+        ChangeStateTo(WeatherState.Default);
     }
 
     protected override void OnAvatarChange()
     {
-        sendParameters();
+        updateParameters();
     }
 
-    protected override string? GetChatBoxText()
+    [ModuleUpdate(ModuleUpdateMode.ChatBox)]
+    private async void updateParameters()
     {
-        if (currentWeather is null) return null;
+        if (weatherProvider is null)
+        {
+            Log("Warning. Module not started correctly");
+            return;
+        }
 
-        return GetSetting<string>(ChatBoxSetting.ChatBoxFormat)
-               .Replace(@"%tempc%", currentWeather.TempC.ToString("0.0"))
-               .Replace(@"%tempf%", currentWeather.TempF.ToString("0.0"))
-               .Replace("%humidity%", currentWeather.Humidity.ToString());
+        if (string.IsNullOrEmpty(GetSetting<string>(WeatherSetting.Postcode)))
+        {
+            Log("Please fill in a postcode/city name");
+            return;
+        }
+
+        var weather = await weatherProvider.RetrieveFor(GetSetting<string>(WeatherSetting.Postcode), DateTime.Now);
+
+        if (weather is null)
+        {
+            Log("Cannot retrieve weather for provided location");
+            Log("If you've entered a post/zip code, try your closest city's name");
+            return;
+        }
+
+        SendParameter(WeatherParameter.Code, getConvertedWeatherCode(weather));
+
+        SetVariableValue(WeatherVariable.TempC, weather.TempC.ToString("0.0"));
+        SetVariableValue(WeatherVariable.TempF, weather.TempF.ToString("0.0"));
+        SetVariableValue(WeatherVariable.Humidity, weather.Humidity.ToString());
+        SetVariableValue(WeatherVariable.Condition, weather.ConditionString);
     }
 
-    private void sendParameters()
-    {
-        if (currentWeather is null) return;
-
-        SendParameter(WeatherParameter.Code, convertedWeatherCode);
-    }
-
-    private int convertedWeatherCode => currentWeather!.Condition.Code switch
+    private static int getConvertedWeatherCode(Weather weather) => weather.Condition.Code switch
     {
         1000 => 1,
         1003 => 2,
@@ -141,5 +134,18 @@ public partial class WeatherModule : ChatBoxModule
     private enum WeatherParameter
     {
         Code
+    }
+
+    private enum WeatherState
+    {
+        Default
+    }
+
+    private enum WeatherVariable
+    {
+        TempC,
+        TempF,
+        Humidity,
+        Condition
     }
 }

@@ -17,8 +17,11 @@ public sealed partial class TabSelector : Container<DrawableTab>
     private static readonly IReadOnlyDictionary<Tab, IconUsage> icon_lookup = new Dictionary<Tab, IconUsage>
     {
         { Tab.Modules, FontAwesome.Solid.ListUl },
-        { Tab.Settings, FontAwesome.Solid.Cog },
+        { Tab.Run, FontAwesome.Solid.Play },
+        { Tab.ChatBox, FontAwesome.Solid.Get(62074) },
         { Tab.Router, FontAwesome.Solid.Get(61920) },
+        { Tab.Startup, FontAwesome.Solid.LocationArrow },
+        { Tab.Settings, FontAwesome.Solid.Cog },
         { Tab.About, FontAwesome.Solid.Info }
     };
 
@@ -27,6 +30,9 @@ public sealed partial class TabSelector : Container<DrawableTab>
     public TabSelector()
     {
         RelativeSizeAxes = Axes.Both;
+        Masking = true;
+        BorderThickness = 2;
+        BorderColour = ThemeManager.Current[ThemeAttribute.Border];
 
         InternalChildren = new Drawable[]
         {

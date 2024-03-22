@@ -1,19 +1,17 @@
 ﻿// Copyright (c) VolcanicArts. Licensed under the GPL-3.0 License.
 // See the LICENSE file in the repository root for full license text.
 
-using VRCOSC.Game;
+using VRCOSC.Game.Modules;
+using VRCOSC.Game.Modules.Bases.Heartrate;
 
 namespace VRCOSC.Modules.Heartrate.HypeRate;
 
-public sealed partial class HypeRateModule : HeartRateModule
+[ModuleTitle("HypeRate")]
+[ModuleDescription("Connects to HypeRate.io and sends your heartrate to VRChat")]
+[ModuleAuthor("VolcanicArts", "https://github.com/VolcanicArts", "https://avatars.githubusercontent.com/u/29819296?v=4")]
+public sealed class HypeRateModule : HeartrateModule<HypeRateProvider>
 {
-    public override string Title => "HypeRate";
-    public override string Description => "Connects to HypeRate.io and sends your heartrate to VRChat";
-    protected override TimeSpan DeltaUpdate => TimeSpan.FromSeconds(10);
-
-    private bool receivedHeartRate;
-
-    protected override HeartRateProvider CreateHeartRateProvider() => new HypeRateProvider(GetSetting<string>(HypeRateSetting.Id), Secrets.GetSecret(VRCOSCSecretsKeys.Hyperate));
+    protected override HypeRateProvider CreateProvider() => new(GetSetting<string>(HypeRateSetting.Id), OfficialModuleSecrets.GetSecret(OfficialModuleSecretsKeys.Hyperate));
 
     protected override void CreateAttributes()
     {
@@ -23,32 +21,19 @@ public sealed partial class HypeRateModule : HeartRateModule
 
     protected override void OnModuleStart()
     {
-        var hypeRateId = GetSetting<string>(HypeRateSetting.Id);
-
-        if (string.IsNullOrEmpty(hypeRateId))
+        if (string.IsNullOrEmpty(GetSetting<string>(HypeRateSetting.Id)))
         {
             Log("Cannot connect to HypeRate. Please enter an Id");
             return;
         }
 
-        SendParameter(HeartrateParameter.Enabled, false);
-
         base.OnModuleStart();
     }
 
-    protected override void OnModuleUpdate()
+    [ModuleUpdate(ModuleUpdateMode.Custom, true, 10000)]
+    private void sendWsHeartbeat()
     {
-        if (!(HeartRateProvider?.IsConnected ?? false)) return;
-
-        ((HypeRateProvider)HeartRateProvider).SendWsHeartBeat();
-        if (!receivedHeartRate) SendParameter(HeartrateParameter.Enabled, false);
-        receivedHeartRate = false;
-    }
-
-    protected override void HandleHeartRateUpdate(int heartrate)
-    {
-        base.HandleHeartRateUpdate(heartrate);
-        receivedHeartRate = true;
+        HeartrateProvider?.SendWsHeartBeat();
     }
 
     private enum HypeRateSetting

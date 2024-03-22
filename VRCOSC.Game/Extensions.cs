@@ -2,6 +2,10 @@
 // See the LICENSE file in the repository root for full license text.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using osu.Framework.Bindables;
+using osu.Framework.Graphics;
 
 namespace VRCOSC.Game;
 
@@ -38,5 +42,62 @@ public static class TypeExtensions
             TypeCode.String => "String",
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown type provided")
         };
+    }
+}
+
+public static class TimeSpanExtensions
+{
+    public static string Format(this TimeSpan timeSpan) => string.Format(timeSpan.TotalHours >= 1 ? @"{0:hh\:mm\:ss}" : @"{0:mm\:ss}", timeSpan);
+}
+
+public static class ArrayExtensions
+{
+    public static T[] NewCopy<T>(this T[] source, int length)
+    {
+        var destination = new T[length];
+        Array.Copy(source, destination, length);
+        return destination;
+    }
+}
+
+public static class Colour4Extensions
+{
+    public static Colour4 Invert(this Colour4 colour) => new(
+        1f - colour.R,
+        1f - colour.G,
+        1f - colour.B,
+        colour.A
+    );
+}
+
+public static class BindableListExtensions
+{
+    public static void ReplaceItems<T>(this BindableList<T> source, IEnumerable<T> items) => source.ReplaceRange(0, source.Count, items);
+}
+
+public static class AssemblyExtensions
+{
+    public static T? GetAssemblyAttribute<T>(this System.Reflection.Assembly ass) where T : Attribute
+    {
+        var attributes = ass.GetCustomAttributes(typeof(T), false);
+        return attributes.Length == 0 ? null : attributes.OfType<T>().SingleOrDefault();
+    }
+}
+
+public static class StringExtensions
+{
+    public const char ZERO_WIDTH = '\u200B';
+
+    public static string Truncate(this string value, int maxChars) => value.Length <= maxChars ? value : value[..maxChars] + "...";
+    public static string EscapeNewLine(this string s) => s.Replace("/n", $"/{ZERO_WIDTH}n");
+    public static string TrimEnd(this string s, string trimmer) => string.IsNullOrEmpty(s) || string.IsNullOrEmpty(trimmer) || !s.EndsWith(trimmer, StringComparison.OrdinalIgnoreCase) ? s : s[..^trimmer.Length];
+}
+
+public static class IntegerExtensions
+{
+    public static int Modulo(this int x, int m)
+    {
+        var r = x % m;
+        return r < 0 ? r + m : r;
     }
 }

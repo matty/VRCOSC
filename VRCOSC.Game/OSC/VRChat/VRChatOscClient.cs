@@ -2,37 +2,120 @@
 // See the LICENSE file in the repository root for full license text.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using osu.Framework.IO.Network;
+using osu.Framework.Logging;
+using VRC.OSCQuery;
 using VRCOSC.Game.OSC.Client;
+using Zeroconf;
 
 namespace VRCOSC.Game.OSC.VRChat;
 
 public class VRChatOscClient : OscClient
 {
-    public Action<VRChatOscData>? OnParameterSent;
-    public Action<VRChatOscData>? OnParameterReceived;
+    public Action<VRChatOscMessage>? OnParameterSent;
+    public Action<VRChatOscMessage>? OnParameterReceived;
+
+    private readonly HttpClient client = new();
+    public int? QueryPort { get; private set; }
 
     public VRChatOscClient()
     {
-        Receiver.OnRawDataReceived += byteData =>
-        {
-            var message = OscDecoder.Decode(byteData);
-            var data = new VRChatOscData(new OscData(message.Address, message.Values));
+        OnMessageSent += message => { OnParameterSent?.Invoke(new VRChatOscMessage(message)); };
 
+        OnMessageReceived += message =>
+        {
+            var data = new VRChatOscMessage(message);
             if (!data.Values.Any()) return;
 
-            OnParameterReceived?.Invoke(new VRChatOscData(data));
+            OnParameterReceived?.Invoke(data);
         };
     }
 
-    public void SendValue(string address, object value) => SendValues(address, new List<object> { value });
-    public void SendValues(string address, List<object> values) => sendData(new OscData(address, values));
-
-    private void sendData(OscData data)
+    public async Task CheckForVRChatOSCQuery()
     {
-        data.PreValidate();
-        SendByteData(data.Encode());
-        OnParameterSent?.Invoke(new VRChatOscData(data));
+        if (QueryPort is not null) return;
+
+        var hosts = await ZeroconfResolver.ResolveAsync("_oscjson._tcp.local.");
+        var host = hosts.FirstOrDefault();
+
+        if (host is null)
+        {
+            Logger.Log("No OscJson host found");
+            QueryPort = null;
+            return;
+        }
+
+        if (!host.Services.Any(s => s.Value.ServiceName.Contains("VRChat-Client")))
+        {
+            Logger.Log("No VRChat-Client found");
+            QueryPort = null;
+            return;
+        }
+
+        var service = host.Services.Single(s => s.Value.ServiceName.Contains("VRChat-Client"));
+
+        QueryPort = service.Value.Port;
+        Logger.Log($"Successfully found OscJson port: {QueryPort}");
+    }
+
+    public void Reset()
+    {
+        QueryPort = null;
+    }
+
+    private async Task<OSCQueryNode?> findParameter(string parameterName)
+    {
+        try
+        {
+            if (QueryPort is null) return null;
+
+            var parameterNameEncoded = UrlEncoding.UrlEncode(parameterName);
+            var url = $"http://127.0.0.1:{QueryPort}/avatar/parameters/{parameterNameEncoded}";
+
+            var response = await client.GetAsync(new Uri(url));
+            var content = await response.Content.ReadAsStringAsync();
+            var node = JsonConvert.DeserializeObject<OSCQueryNode>(content);
+
+            return node is null || node.Access == Attributes.AccessValues.NoValue ? null : node;
+        }
+        catch (Exception e)
+        {
+            Logger.Error(e, $"Exception when trying to find parameter: {parameterName}");
+            return null;
+        }
+    }
+
+    public async Task<object?> FindParameterValue(string parameterName)
+    {
+        var node = await findParameter(parameterName);
+        if (node is null) return null;
+
+        return node.OscType switch
+        {
+            "f" => Convert.ToSingle(node.Value[0]),
+            "i" => Convert.ToInt32(node.Value[0]),
+            "T" => Convert.ToBoolean(node.Value[0]),
+            "F" => Convert.ToBoolean(node.Value[0]),
+            _ => throw new InvalidOperationException($"Unknown type {node.OscType}")
+        };
+    }
+
+    public async Task<TypeCode?> FindParameterType(string parameterName)
+    {
+        var node = await findParameter(parameterName);
+        if (node is null) return null;
+
+        return node.OscType switch
+        {
+            "f" => TypeCode.Single,
+            "i" => TypeCode.Int32,
+            "T" => TypeCode.Boolean,
+            "F" => TypeCode.Boolean,
+            _ => throw new InvalidOperationException($"Unknown type {node.OscType}")
+        };
     }
 }

@@ -2,44 +2,60 @@
 // See the LICENSE file in the repository root for full license text.
 
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
-using osu.Framework.Extensions.EnumExtensions;
 
 namespace VRCOSC.Game.OSC.Client;
 
 public abstract class OscClient
 {
-    protected readonly OscSender Sender = new();
-    protected readonly OscReceiver Receiver = new();
+    private readonly OscSender sender = new();
+    private readonly OscReceiver receiver = new();
 
-    public void Initialise(string ipAddress, int sendPort, int receivePort)
+    public Action<OscMessage>? OnMessageSent;
+    public Action<OscMessage>? OnMessageReceived;
+
+    public Action<byte[]>? OnDataSent;
+    public Action<byte[]>? OnDataReceived;
+
+    public OscClient()
     {
-        Sender.Initialise(new IPEndPoint(IPAddress.Parse(ipAddress), sendPort));
-        Receiver.Initialise(new IPEndPoint(IPAddress.Parse(ipAddress), receivePort));
+        receiver.OnRawDataReceived += data =>
+        {
+            OnDataReceived?.Invoke(data);
+
+            var message = OscDecoder.Decode(data);
+            if (message is null) return;
+
+            OnMessageReceived?.Invoke(message);
+        };
     }
 
-    public void Enable(OscClientFlag flag)
+    public void Initialise(IPEndPoint sendEndpoint, IPEndPoint receiveEndpoint)
     {
-        if (flag.HasFlagFast(OscClientFlag.Send)) Sender.Enable();
-        if (flag.HasFlagFast(OscClientFlag.Receive)) Receiver.Enable();
+        sender.Initialise(sendEndpoint);
+        receiver.Initialise(receiveEndpoint);
     }
 
-    public async Task Disable(OscClientFlag flag)
+    public bool EnableSend() => sender.Enable();
+    public bool EnableReceive() => receiver.Enable();
+
+    public void DisableSend() => sender.Disable();
+    public Task DisableReceive() => receiver.Disable();
+
+    public void SendValue(string address, object value) => SendValues(address, new List<object> { value });
+    public void SendValues(string address, List<object> values) => SendMessage(new OscMessage(address, values));
+
+    public void SendMessage(OscMessage message)
     {
-        if (flag.HasFlagFast(OscClientFlag.Send)) Sender.Disable();
-        if (flag.HasFlagFast(OscClientFlag.Receive)) await Receiver.Disable();
+        Send(OscEncoder.Encode(message));
+        OnMessageSent?.Invoke(message);
     }
 
-    public void SendByteData(byte[] data)
+    public void Send(byte[] data)
     {
-        Sender.Send(data);
+        sender.Send(data);
+        OnDataSent?.Invoke(data);
     }
-}
-
-[Flags]
-public enum OscClientFlag
-{
-    Send = 1 << 0,
-    Receive = 1 << 1
 }

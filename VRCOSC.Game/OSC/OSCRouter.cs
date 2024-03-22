@@ -4,9 +4,12 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
-using VRCOSC.Game.Modules;
+using osu.Framework.Bindables;
+using osu.Framework.Extensions.IEnumerableExtensions;
+using VRCOSC.Game.Managers;
 using VRCOSC.Game.OSC.Client;
 using VRCOSC.Game.OSC.VRChat;
+using VRCOSC.Game.Util;
 
 namespace VRCOSC.Game.OSC;
 
@@ -15,71 +18,66 @@ public class OSCRouter
     private readonly VRChatOscClient vrChatOscClient;
     private readonly TerminalLogger terminal = new("OSCRouter");
 
-    public readonly List<OscSender> Senders = new();
-    public readonly List<OscReceiver> Receivers = new();
+    private readonly List<OscSender> senders = new();
+    private readonly List<OscReceiver> receivers = new();
 
     public OSCRouter(VRChatOscClient vrChatOscClient)
     {
         this.vrChatOscClient = vrChatOscClient;
     }
 
-    public void Initialise(List<RouterData> data)
+    public void Start(IEnumerable<RouterData> data)
     {
         data.ForEach(routerData =>
         {
             var pair = routerData.Endpoints;
 
-            if (!string.IsNullOrEmpty(pair.SendAddress))
+            if (!string.IsNullOrEmpty(pair.SendAddress.Value))
             {
                 var sender = new OscSender();
-                sender.Initialise(new IPEndPoint(IPAddress.Parse(pair.SendAddress), pair.SendPort));
-                Senders.Add(sender);
+                sender.Initialise(new IPEndPoint(IPAddress.Parse(pair.SendAddress.Value), pair.SendPort.Value));
+                senders.Add(sender);
 
                 terminal.Log($"Initialising sender labelled {routerData.Label} on {pair.SendAddress}:{pair.SendPort}");
             }
 
-            if (!string.IsNullOrEmpty(pair.ReceiveAddress))
+            if (!string.IsNullOrEmpty(pair.ReceiveAddress.Value))
             {
                 var receiver = new OscReceiver();
-                receiver.Initialise(new IPEndPoint(IPAddress.Parse(pair.ReceiveAddress), pair.ReceivePort));
-                Receivers.Add(receiver);
+                receiver.Initialise(new IPEndPoint(IPAddress.Parse(pair.ReceiveAddress.Value), pair.ReceivePort.Value));
+                receivers.Add(receiver);
 
                 terminal.Log($"Initialising receiver labelled {routerData.Label} on {pair.ReceiveAddress}:{pair.ReceivePort}");
             }
         });
-    }
 
-    // Anything coming from VRC has to be parsed first, hence listening for parameters and not the raw data
-    // I have no idea why, it should just work forwarding the raw bytes
-    public void Enable()
-    {
-        Senders.ForEach(sender =>
+        senders.ForEach(sender =>
         {
-            vrChatOscClient.OnParameterReceived += parameter => sender.Send(parameter.Encode());
+            vrChatOscClient.OnMessageReceived += message => sender.Send(OscEncoder.Encode(message));
             sender.Enable();
         });
 
-        Receivers.ForEach(receiver =>
+        receivers.ForEach(receiver =>
         {
-            receiver.OnRawDataReceived += vrChatOscClient.SendByteData;
+            receiver.OnRawDataReceived += vrChatOscClient.Send;
             receiver.Enable();
         });
     }
 
     public async Task Disable()
     {
-        foreach (var sender in Senders) sender.Disable();
-        foreach (var receiver in Receivers) await receiver.Disable();
+        foreach (var sender in senders) sender.Disable();
+        foreach (var receiver in receivers) await receiver.Disable();
 
-        Senders.Clear();
-        Receivers.Clear();
+        senders.Clear();
+        receivers.Clear();
     }
 }
 
 public class OSCRouterEndpoints
 {
-    public string SendAddress { get; set; } = string.Empty;
-    public int SendPort { get; set; }
-    public string ReceiveAddress { get; set; } = string.Empty;
-    public int ReceivePort { get; set; }
+    public readonly Bindable<string> SendAddress = new(string.Empty);
+    public readonly Bindable<int> SendPort = new();
+    public readonly Bindable<string> ReceiveAddress = new(string.Empty);
+    public readonly Bindable<int> ReceivePort = new();
 }

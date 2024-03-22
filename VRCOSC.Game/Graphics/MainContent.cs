@@ -6,9 +6,12 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using VRCOSC.Game.Graphics.About;
+using VRCOSC.Game.Graphics.ChatBox;
 using VRCOSC.Game.Graphics.ModuleListing;
 using VRCOSC.Game.Graphics.Router;
+using VRCOSC.Game.Graphics.Run;
 using VRCOSC.Game.Graphics.Settings;
+using VRCOSC.Game.Graphics.Startup;
 using VRCOSC.Game.Graphics.TabBar;
 
 namespace VRCOSC.Game.Graphics;
@@ -50,9 +53,12 @@ public sealed partial class MainContent : Container
                             Depth = float.MaxValue,
                             Children = new Drawable[]
                             {
-                                new ModuleListingScreen(),
-                                new SettingsScreen(),
+                                new ModulesScreen(),
+                                new RunScreen(),
+                                new ChatBoxScreen(),
                                 new RouterScreen(),
+                                new StartupScreen(),
+                                new SettingsScreen(),
                                 new AboutScreen()
                             }
                         }
@@ -64,8 +70,6 @@ public sealed partial class MainContent : Container
 
     protected override void LoadComplete()
     {
-        base.LoadComplete();
-
         selectedTab.BindValueChanged(tab =>
         {
             var id = (int)tab.NewValue;

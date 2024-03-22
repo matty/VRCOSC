@@ -11,84 +11,82 @@ namespace VRCOSC.Game.Graphics.UI.Button;
 
 public partial class IconButton : BasicButton
 {
-    private IconUsage iconStateOff = FontAwesome.Solid.PowerOff;
-    private IconUsage iconStateOn = FontAwesome.Solid.PowerOff;
+    private int iconPadding = 8;
 
     private SpriteIcon spriteIcon = null!;
+    private Container? wrapper;
 
-    public IconUsage Icon
+    public IconUsage? Icon
     {
-        get => iconStateOff;
+        get => IconStateOff;
         set
         {
-            iconStateOff = value;
-            iconStateOn = value;
-            updateIcon();
+            IconStateOff = value;
+            IconStateOn = value;
         }
     }
 
-    public IconUsage IconStateOff
+    public IconUsage? IconStateOff { get; set; } = FontAwesome.Solid.PowerOff;
+    public IconUsage? IconStateOn { get; set; } = FontAwesome.Solid.PowerOff;
+
+    public int IconPadding
     {
-        get => iconStateOff;
+        get => iconPadding;
         set
         {
-            iconStateOff = value;
-            updateIcon();
+            iconPadding = value;
+            if (wrapper is null) return;
+
+            wrapper.Padding = new MarginPadding(iconPadding);
         }
     }
-
-    public IconUsage IconStateOn
-    {
-        get => iconStateOn;
-        set
-        {
-            iconStateOn = value;
-            updateIcon();
-        }
-    }
-
-    public int IconPadding { get; init; } = 8;
 
     public bool IconShadow { get; init; }
+
+    public IconButton()
+    {
+        CornerRadius = 5;
+    }
 
     [BackgroundDependencyLoader]
     private void load()
     {
-        Add(new Container
+        Add(wrapper = new Container
         {
-            Anchor = Anchor.Centre,
-            Origin = Anchor.Centre,
             RelativeSizeAxes = Axes.Both,
-            FillMode = FillMode.Fit,
             Padding = new MarginPadding(IconPadding),
-            Child = spriteIcon = createSpriteIcon()
+            Child = spriteIcon = new SpriteIcon
+            {
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                RelativeSizeAxes = Axes.Both,
+                FillMode = FillMode.Fit,
+                Shadow = IconShadow,
+                Colour = ThemeManager.Current[ThemeAttribute.Text]
+            }
         });
-
-        State.BindValueChanged(_ => updateIcon(), true);
     }
 
-    protected override void LoadComplete()
+    protected override void Update()
     {
-        base.LoadComplete();
-        updateIcon();
-    }
-
-    private void updateIcon()
-    {
-        if (!IsLoaded) return;
+        base.Update();
 
         if (Stateful)
-            spriteIcon.Icon = State.Value ? iconStateOn : iconStateOff;
+            setIcon(State.Value ? IconStateOn : IconStateOff);
         else
-            spriteIcon.Icon = iconStateOff;
+            setIcon(IconStateOn);
     }
 
-    private SpriteIcon createSpriteIcon() => new()
+    private void setIcon(IconUsage? iconUsage)
     {
-        Anchor = Anchor.Centre,
-        Origin = Anchor.Centre,
-        RelativeSizeAxes = Axes.Both,
-        Shadow = IconShadow,
-        Colour = ThemeManager.Current[ThemeAttribute.Text]
-    };
+        if (iconUsage is null)
+        {
+            spriteIcon.FadeTo(0, 150, Easing.OutQuint);
+        }
+        else
+        {
+            spriteIcon.Icon = iconUsage.Value;
+            spriteIcon.FadeTo(1, 150, Easing.OutQuint);
+        }
+    }
 }

@@ -2,18 +2,17 @@
 // See the LICENSE file in the repository root for full license text.
 
 using Newtonsoft.Json;
-using VRCOSC.Game.Modules;
+using VRCOSC.Game.Modules.Bases.Heartrate;
 using VRCOSC.Modules.Heartrate.HypeRate.Models;
 
 namespace VRCOSC.Modules.Heartrate.HypeRate;
 
-public sealed class HypeRateProvider : HeartRateProvider
+public sealed class HypeRateProvider : WebSocketHeartrateProvider
 {
     private readonly string hypeRateId;
     private readonly string apiKey;
-    private readonly TerminalLogger terminal = new(new HypeRateModule().Title);
 
-    protected override string WebSocketUrl => $"wss://app.hyperate.io/socket/websocket?token={apiKey}";
+    protected override Uri WebsocketUri => new($"wss://app.hyperate.io/socket/websocket?token={apiKey}");
 
     public HypeRateProvider(string hypeRateId, string apiKey)
     {
@@ -21,62 +20,58 @@ public sealed class HypeRateProvider : HeartRateProvider
         this.apiKey = apiKey;
     }
 
-    protected override void HandleWsConnected()
+    protected override void OnWebSocketConnected()
     {
-        terminal.Log("Successfully connected to the HypeRate websocket");
+        Log("Connected to the HypeRate websocket");
         sendJoinChannel();
     }
 
-    protected override void HandleWsDisconnected()
+    protected override void OnWebSocketDisconnected()
     {
-        terminal.Log("Disconnected from the HypeRate websocket");
+        Log("Disconnected from the HypeRate websocket");
     }
 
-    protected override void HandleWsMessage(string message)
+    protected override void OnWebSocketMessage(string message)
     {
-        var eventModel = JsonConvert.DeserializeObject<EventModel>(message);
-
-        if (eventModel is null)
+        try
         {
-            terminal.Log($"Received an unrecognised message:\n{message}");
-            return;
+            var eventModel = JsonConvert.DeserializeObject<EventModel>(message);
+
+            if (eventModel is null)
+            {
+                Log($"Received an unrecognised message:\n{message}");
+                return;
+            }
+
+            switch (eventModel.Event)
+            {
+                case "hr_update":
+                    handleHrUpdate(JsonConvert.DeserializeObject<HeartRateUpdateModel>(message)!);
+                    break;
+            }
         }
-
-        switch (eventModel.Event)
+        catch (JsonReaderException)
         {
-            case "hr_update":
-                handleHrUpdate(JsonConvert.DeserializeObject<HeartRateUpdateModel>(message)!);
-                break;
-
-            case "phx_reply":
-                handlePhxReply(JsonConvert.DeserializeObject<PhxReplyModel>(message)!);
-                break;
+            Log("Error receiving heartrate result");
         }
     }
 
     public void SendWsHeartBeat()
     {
-        terminal.Log("Sending HypeRate websocket heartbeat");
-        SendData(new HeartBeatModel());
+        SendDataAsJson(new HeartBeatModel());
     }
 
     private void sendJoinChannel()
     {
-        terminal.Log($"Requesting to hook into heartrate for Id {hypeRateId}");
         var joinChannelModel = new JoinChannelModel
         {
             Id = hypeRateId
         };
-        SendData(joinChannelModel);
-    }
-
-    private void handlePhxReply(PhxReplyModel reply)
-    {
-        terminal.Log($"Status of reply: {reply.Payload.Status}");
+        SendDataAsJson(joinChannelModel);
     }
 
     private void handleHrUpdate(HeartRateUpdateModel update)
     {
-        OnHeartRateUpdate?.Invoke(update.Payload.HeartRate);
+        OnHeartrateUpdate?.Invoke(update.Payload.HeartRate);
     }
 }

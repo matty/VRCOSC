@@ -4,8 +4,7 @@
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
-using osu.Framework.Graphics.Containers;
-using VRCOSC.Game.Graphics.Themes;
+using osuTK;
 using VRCOSC.Game.Graphics.UI.Button;
 
 namespace VRCOSC.Game.Graphics.Settings.Cards;
@@ -14,32 +13,22 @@ public partial class ToggleSettingCard : SettingCard<bool>
 {
     private ToggleButton toggleButton = null!;
 
-    public ToggleSettingCard(string title, string description, Bindable<bool> settingBindable)
-        : base(title, description, settingBindable)
+    public ToggleSettingCard(string title, string description, Bindable<bool> settingBindable, string linkedUrl)
+        : base(title, description, settingBindable, linkedUrl)
     {
     }
 
     [BackgroundDependencyLoader]
     private void load()
     {
-        ContentWrapper.Add(new Container
+        Add(toggleButton = new ToggleButton
         {
-            Anchor = Anchor.CentreRight,
-            Origin = Anchor.CentreRight,
-            RelativeSizeAxes = Axes.Both,
-            FillMode = FillMode.Fit,
-            Padding = new MarginPadding(10),
-            Child = toggleButton = new ToggleButton
-            {
-                Anchor = Anchor.Centre,
-                Origin = Anchor.Centre,
-                RelativeSizeAxes = Axes.Both,
-                CornerRadius = 10,
-                BorderColour = ThemeManager.Current[ThemeAttribute.Border],
-                BorderThickness = 2,
-                ShouldAnimate = false,
-                State = { Value = SettingBindable.Value }
-            }
+            Anchor = Anchor.TopCentre,
+            Origin = Anchor.TopCentre,
+            Size = new Vector2(25),
+            BorderThickness = 2,
+            ShouldAnimate = false,
+            State = { Value = SettingBindable.Value }
         });
     }
 
